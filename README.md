@@ -64,13 +64,13 @@ Because the books are plain Polyglot files, other chess programs can read them. 
 
 The repository doesn't include Stockfish, because the exe is over GitHub's 100 MB file limit. To run from a clone:
 
-1. Download Stockfish from https://stockfishchess.org/download/ and put `stockfish-windows-x86-64-avx2.exe` in a folder named `stockfish` next to `trainer.py`.
+1. Download Stockfish from https://stockfishchess.org/download/ and put its `.exe` in a folder named `stockfish` next to `trainer.py`. Any build works; the trainer uses whichever `stockfish*.exe` it finds there.
 2. Run `pip install chess`, then `python trainer.py`.
 
 ## Requirements
 
 - Windows (the bundled Stockfish is a Windows build), Python 3, and a lichess account.
-- The bundled Stockfish needs a CPU with AVX2 (most Intel/AMD CPUs from about 2013 on).
+- The bundled Stockfish 19 is the universal x86-64 build, which picks the fastest code for your CPU, so it runs on any 64-bit Intel or AMD PC.
 
 ## License
 

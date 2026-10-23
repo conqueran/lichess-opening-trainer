@@ -35,12 +35,11 @@ import chess.polyglot
 HERE = Path(__file__).resolve().parent
 CHESS_DIR = HERE.parent
 BOOKS = {chess.WHITE: HERE / "White.bin", chess.BLACK: HERE / "Black.bin"}
-STOCKFISH_EXE = "stockfish-windows-x86-64-avx2.exe"
 # Stockfish ships inside this folder when the trainer is shared; otherwise it's
-# the stockfish folder next to it.
-STOCKFISH = next((p for p in (HERE / "stockfish" / STOCKFISH_EXE, CHESS_DIR / "stockfish" / STOCKFISH_EXE)
-                  if p.exists()), HERE / "stockfish" / STOCKFISH_EXE)
-STOCKFISH_MISSING = (f"Stockfish wasn't found. Put {STOCKFISH_EXE} in a folder named "
+# the stockfish folder next to it. Any Stockfish build's exe will do.
+STOCKFISH = next((exe for folder in (HERE / "stockfish", CHESS_DIR / "stockfish")
+                  for exe in sorted(folder.glob("stockfish*.exe"))), None)
+STOCKFISH_MISSING = (f"Stockfish wasn't found. Put the Stockfish .exe in a folder named "
                      f"'stockfish' inside {HERE}.")
 PROGRESS_FILE = HERE / "progress.json"
 CONFIG_FILE = HERE / "config.json"
@@ -295,7 +294,7 @@ def walk(info, moves, side, start, depth, added, report, cancelled, show=lambda 
     board = chess.Board()
     for san in moves[:start]:
         board.push_san(san)
-    if not STOCKFISH.exists():
+    if STOCKFISH is None:
         raise RuntimeError(STOCKFISH_MISSING)
     engine = chess.engine.SimpleEngine.popen_uci(str(STOCKFISH))
     try:
@@ -793,7 +792,7 @@ def main():
         webbrowser.open(url)
         return
     ensure_books()
-    if not STOCKFISH.exists():
+    if STOCKFISH is None:
         print("WARNING: " + STOCKFISH_MISSING)
     print(f"Lichess opening trainer running at {url}  (close this window to stop)")
     threading.Timer(0.5, webbrowser.open, args=(url,)).start()
