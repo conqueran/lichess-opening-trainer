@@ -473,6 +473,7 @@ function showDecide(state) {
 
 async function choose(uci) {
   $("options").hidden = true;
+  $("arrows").innerHTML = "";
   const state = await api("/decide", { uci });
   if (state.error) { showDecide(await api("/state")); return; }
   if (ACTIVE.includes(state.phase)) { enterGameMode(state); return; }

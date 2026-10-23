@@ -18,6 +18,8 @@ Your books start empty and grow with every game. They're standard **Polyglot** `
 | Analysis follows your game | Drilling the flashcard |
 |---|---|
 | <img src="screenshots/analyzing.png" alt="Board during analysis, finding where 7...Nbd7 ranks" width="380"> | <img src="screenshots/flashcard.png" alt="Flashcard answered correctly, with Stockfish's ranking" width="380"> |
+| **End of a game:** what was added to your book | **A miss:** your book move, and how your game move ranked |
+| <img src="screenshots/game-summary.png" alt="Summary: added 10 moves to your White book and a new card" width="380"> | <img src="screenshots/missed.png" alt="Flashcard answered wrong, showing the book move Nc3 and Stockfish's ranking down to the played c4" width="380"> |
 
 ## Download
 
@@ -53,6 +55,10 @@ These are created next to `trainer.py` on first run. They're yours, and they're 
 | `config.json` | Username, time control and depth |
 
 To start over, close the trainer and delete them.
+
+Because the books are plain Polyglot files, other chess programs can read them. Here's `White.bin` open in Scid vs. PC:
+
+<img src="screenshots/scid.png" alt="Scid vs. PC showing White.bin with the book moves Bf5 and Nf6 in a Caro-Kann position" width="560">
 
 ## Running from source
 
