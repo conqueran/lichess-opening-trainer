@@ -9,6 +9,16 @@ Build your own opening repertoire from the games you actually play on lichess, t
 
 Your books start empty and grow with every game. They're standard **Polyglot** `.bin` files, so you can also open and edit them in Scid or other chess programs.
 
+## Screenshots
+
+**Choosing a move for your book.** You played 7...Nbd7; Stockfish lists every move it ranks above yours.
+
+<img src="screenshots/choose-move.png" alt="Decision screen listing b5, Be7 and h6 above the played move Nbd7, with evaluations" width="480">
+
+| Analysis follows your game | Drilling the flashcard |
+|---|---|
+| <img src="screenshots/analyzing.png" alt="Board during analysis, finding where 7...Nbd7 ranks" width="380"> | <img src="screenshots/flashcard.png" alt="Flashcard answered correctly, with Stockfish's ranking" width="380"> |
+
 ## Download
 
 **[Download the latest release](../../releases/latest)** (Windows). The zip includes Stockfish, so there's nothing else to download except Python.
