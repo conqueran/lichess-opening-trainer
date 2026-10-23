@@ -1,0 +1,11 @@
+# Stockfish ships in the release zip, not in the repository (the exe is over 100 MB)
+stockfish/
+
+# Your personal data, created on first run
+White.bin
+Black.bin
+progress.json
+config.json
+*.tmp
+
+__pycache__/

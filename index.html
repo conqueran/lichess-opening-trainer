@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="darkreader-lock">
+<title>Lichess Opening Trainer</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --panel: #fff; --text: #222; --muted: #666;
+    --light: #d1d9e1; --dark: #6399c2; --sel: rgba(20, 85, 30, .5);
+    --good: #2e7d32; --bad: #c62828; --arrow: rgba(21, 101, 192, .8);
+    --info: #1565c0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1e1f22; --panel: #2a2c30; --text: #eee; --muted: #aaa; --info: #64a8f0; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.4 system-ui, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px; }
+  a { color: inherit; }
+  #book { font-weight: 600; margin-bottom: 4px; }
+  button { font: inherit; padding: 6px 10px; border-radius: 6px;
+                   border: 1px solid #999; background: var(--panel); color: var(--text); }
+  button { cursor: pointer; }
+  #top { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+  #stats { flex: 1; font-size: 14px; color: var(--muted); }
+  #playnow { padding: 3px 8px; font-size: 13px; white-space: nowrap; }
+  #path { min-height: 2.8em; font-size: 14px; margin-bottom: 8px; }
+  #wrap { position: relative; width: 100%; aspect-ratio: 1; user-select: none; touch-action: none; }
+  #board { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); width: 100%; height: 100%;
+           border-radius: 4px; overflow: hidden; }
+  .sq { position: relative; display: flex; align-items: center; justify-content: center; }
+  .sq.l { background-color: var(--light); } .sq.d { background-color: var(--dark); }
+  .sq { background-image: linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,0) 55%, rgba(0,30,70,.06)); }
+  .sq.sel { box-shadow: inset 0 0 0 4px var(--sel); }
+  .sq.hint::after { content: ""; width: 26%; height: 26%; border-radius: 50%; background: var(--sel); }
+  .sq .coord { position: absolute; font-size: 11px; font-weight: 600; opacity: .7; pointer-events: none; }
+  .sq .rank { top: 2px; left: 3px; } .sq .file { bottom: 1px; right: 3px; }
+  .sq.l .coord { color: var(--dark); } .sq.d .coord { color: var(--light); }
+  .sq .pc { width: 100%; height: 100%; pointer-events: none; }
+  #drag { position: fixed; pointer-events: none; z-index: 10; transform: translate(-50%, -50%);
+          width: min(12vw, 68px); height: min(12vw, 68px); }
+  #drag .pc { width: 100%; height: 100%; }
+  #arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #feedback { min-height: 3.2em; margin-top: 12px; padding: 10px 12px; border-radius: 6px;
+              background: var(--panel); }
+  #feedback.good { border-left: 6px solid var(--good); }
+  #feedback.bad { border-left: 6px solid var(--bad); }
+  #feedback.info { border-left: 6px solid var(--info); }
+  #feedback .detail { display: block; margin-top: 4px; font-size: 14px; color: var(--muted); }
+  #gamebtns { margin-top: 10px; display: flex; gap: 8px; }
+  #gamebtns[hidden] { display: none; }
+  #gamebtns button { flex: 1; padding: 10px; font-weight: 600; }
+  #next { margin-top: 10px; width: 100%; padding: 10px; font-weight: 600; }
+  .again { color: var(--bad); font-weight: 600; }
+  .tag { font-weight: 600; }
+  #fenrow { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+            font-size: 13px; color: var(--muted); }
+  #fenrow[hidden] { display: none; }
+  #fen { flex: 1 1 100%; user-select: all; overflow-wrap: anywhere; }
+  #fenrow button { padding: 3px 8px; font-size: 13px; }
+  #setup { background: var(--panel); padding: 16px; border-radius: 6px; margin-bottom: 12px; }
+  #setup[hidden] { display: none; }
+  #setup input { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid #999;
+                 background: var(--bg); color: var(--text); width: 100%; margin: 8px 0; }
+  #setuperr { color: var(--bad); font-size: 14px; }
+  #settings { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 14px;
+              color: var(--muted); margin-bottom: 8px; }
+  #settings select { font: inherit; padding: 2px 4px; border-radius: 6px; border: 1px solid #999;
+                     background: var(--panel); color: var(--text); }
+  #options { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  #options[hidden] { display: none; }
+  #options button { display: flex; gap: 10px; align-items: baseline; text-align: left; padding: 8px 12px; }
+  #options button .rk { color: var(--muted); min-width: 1.6em; }
+  #options button .ev { margin-left: auto; font-variant-numeric: tabular-nums; }
+  #options button.mine { border-color: var(--info); }
+  .tagline { font-size: 13px; color: var(--muted); }</style>
+</head>
+<body>
+<main>
+  <form id="setup" hidden>
+    <b>Your lichess username</b>
+    <input id="user" autocomplete="username" spellcheck="false" required>
+    <button>Save</button> <span id="setuperr"></span>
+  </form>
+  <div id="top">
+    <div id="stats"></div>
+    <button id="playnow" hidden>Play now</button>
+  </div>
+  <div id="settings">
+    <label>Time control <select id="tc"></select></label>
+    <label>Analysis depth <select id="depth"></select></label>
+  </div>
+  <div id="book"></div>
+  <div id="path"></div>
+  <div id="wrap">
+    <div id="board"></div>
+    <svg id="arrows" viewBox="0 0 8 8"></svg>
+  </div>
+  <div id="feedback">Loading…</div>
+  <div id="options" hidden></div>
+  <div id="gamebtns" hidden>
+    <button id="gameaction"></button>
+  </div>
+  <button id="next" hidden>Next (Enter)</button>
+  <div id="fenrow" hidden>
+    <code id="fen"></code>
+    <button id="copyfen">Copy FEN</button>
+    <a id="analyze" target="_blank" rel="noopener">Analyze on lichess</a>
+    <a id="gamelink" target="_blank" rel="noopener">Open game at this move</a>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
+const ACTIVE = ["seeking", "playing", "analyzing"];
+let card = null, pieces = {}, orient = "white", locked = true, selected = null, drag = null;
+let polling = null, countdown = null, timeControl = "5+0", phase = "idle", shownFen = null;
+// On first opening the page, an empty deck waits for Play instead of
+// counting down, which leaves time to pick the time control and depth.
+let autoPlay = false;
+
+async function api(path, body) {
+  try {
+    const res = await fetch(path, body === undefined ? {} :
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    return await res.json();
+  } catch (err) {
+    showStopped("The trainer has stopped. Double-click OpeningTrainer.bat to start it again.");
+    throw err;
+  }
+}
+
+function showStopped(message) {
+  document.querySelector("main").innerHTML = `<p>${message} Your progress is saved.</p>`;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+}
+
+function parseFen(fen) {
+  const out = {};
+  fen.split(" ")[0].split("/").forEach((row, i) => {
+    let f = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) { f += +ch; continue; }
+      out["abcdefgh"[f] + (8 - i)] = ch;
+      f++;
+    }
+  });
+  return out;
+}
+
+function squares() {
+  const files = "abcdefgh".split(""), ranks = [8, 7, 6, 5, 4, 3, 2, 1];
+  if (orient === "black") { files.reverse(); ranks.reverse(); }
+  return ranks.flatMap(r => files.map(f => f + r));
+}
+
+function sqXY(sq) {
+  let x = sq.charCodeAt(0) - 97, y = 8 - +sq[1];
+  if (orient === "black") { x = 7 - x; y = 7 - y; }
+  return [x + .5, y + .5];
+}
+
+function render() {
+  const board = $("board");
+  board.innerHTML = "";
+  const list = squares();
+  list.forEach((sq, i) => {
+    const el = document.createElement("div");
+    const light = (sq.charCodeAt(0) - 97 + +sq[1]) % 2 === 0;
+    el.className = "sq " + (light ? "l" : "d");
+    el.style.backgroundColor = squareColor(sq, light ? "l" : "d");
+    el.dataset.sq = sq;
+    if (sq === selected) el.classList.add("sel");
+    if (selected && targets(selected).includes(sq)) el.classList.add("hint");
+    if (i % 8 === 0) el.insertAdjacentHTML("beforeend", `<span class="coord rank">${sq[1]}</span>`);
+    if (i >= 56) el.insertAdjacentHTML("beforeend", `<span class="coord file">${sq[0]}</span>`);
+    const p = pieces[sq];
+    if (p && !(drag && drag.from === sq)) el.insertAdjacentHTML("beforeend", pieceHtml(p));
+    board.appendChild(el);
+  });
+}
+
+// Square colors shade from the board's center (bright) to its edges (deep),
+// sampled from lichess's glassy blue board.
+const SHADE = {
+  l: { center: [219, 225, 233], edge: [194, 204, 214] },
+  d: { center: [121, 174, 205], edge: [74, 122, 171] },
+};
+
+function squareColor(sq, kind) {
+  const [x, y] = sqXY(sq);
+  const t = Math.min(1, Math.hypot(x - 4, y - 4) / 4.6);
+  const { center, edge } = SHADE[kind];
+  return `rgb(${center.map((c, i) => Math.round(c + (edge[i] - c) * t)).join(",")})`;
+}
+
+function pieceHtml(p) {
+  const color = p === p.toUpperCase() ? "w" : "b";
+  return `<img class="pc" src="/pieces/${color}${p.toUpperCase()}.svg" alt="" draggable="false">`;
+}
+
+function targets(from) {
+  return card ? card.legal.filter(m => m.startsWith(from)).map(m => m.slice(2, 4)) : [];
+}
+
+function ownPiece(sq) {
+  const p = pieces[sq];
+  return p && (p === p.toUpperCase()) === (orient === "white");
+}
+
+function drawArrow(uci) {
+  const [x1, y1] = sqXY(uci.slice(0, 2)), [x2, y2] = sqXY(uci.slice(2, 4));
+  const len = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+  const ex = x2 - ux * .35, ey = y2 - uy * .35;
+  $("arrows").insertAdjacentHTML("beforeend", `
+    <line x1="${x1}" y1="${y1}" x2="${ex}" y2="${ey}" stroke="var(--arrow)" stroke-width=".18" stroke-linecap="round"/>
+    <polygon fill="var(--arrow)" points="${x2},${y2} ${ex - uy * .3},${ey + ux * .3} ${ex + uy * .3},${ey - ux * .3}"/>`);
+}
+
+function showStats(s) {
+  const n = x => x.toLocaleString();
+  $("stats").innerHTML =
+    `This session: <b>${n(s.sessionUnique)}</b> positions (${n(s.correct)}/${n(s.answered)} correct)<br>` +
+    `All time: <b>${n(s.total)}</b> cards from ${n(s.games)} games · learned ${n(s.learned)} · due ${n(s.due)}<br>` +
+    `Book: ${n(s.book.white)} White moves · ${n(s.book.black)} Black moves`;
+}
+
+function cardTag(c) {
+  if (c.status === "new") return `<span class="tag">New</span> — your move.`;
+  if (c.status === "missed") return `<span class="again">Missed before</span> — your move.`;
+  const times = c.streak === 1 ? "once" : `${c.streak}× in a row`;
+  return `<span class="tag">Review</span> (right ${times}) — your move.`;
+}
+
+function reviewText(days) {
+  if (days === 1) return "Next review tomorrow.";
+  if (days < 30) return `Next review in ${days} days.`;
+  if (days >= 365) {
+    const years = days / 365;
+    return `Next review in ${years < 10 ? +years.toFixed(1) : Math.round(years)} years.`;
+  }
+  const months = Math.round(days / 30);
+  return `Next review in ${months} month${months > 1 ? "s" : ""}.`;
+}
+
+function showPath(path) {
+  if (!path.length) { $("path").textContent = "Starting position"; return; }
+  $("path").textContent = path.map((san, i) =>
+    (i % 2 === 0 ? (i / 2 + 1) + ". " : "") + san).join(" ");
+}
+
+function moveLabel(c) {
+  const n = Math.floor(c.path.length / 2) + 1;
+  return c.side === "white" ? `${n}.` : `${n}...`;
+}
+
+function gameHeader(c) {
+  const g = c.game;
+  const opp = esc(g.opponent) + (g.rating ? ` (${g.rating})` : "");
+  return `vs ${opp} · ${g.speed || ""} · ${g.date} — you are ${c.side === "white" ? "White" : "Black"}, move ${moveLabel(c)}`;
+}
+
+function clearBoardUi() {
+  $("arrows").innerHTML = "";
+  $("next").hidden = true;
+  $("fenrow").hidden = true;
+  $("gamebtns").hidden = true;
+  $("options").hidden = true;
+  $("book").textContent = "";
+  $("path").textContent = "";
+  locked = true;
+  selected = null;
+}
+
+async function loadCard() {
+  const data = await api("/next");
+  showStats(data.stats);
+  clearBoardUi();
+  $("feedback").className = "";
+  card = data.card;
+  if (data.done) {
+    if (autoPlay) { deckClear(); return; }
+    autoPlay = true;
+    showGame({ phase: "idle", message: "No cards to do right now.",
+               detail: "Pick a time control and depth above, then press Play." });
+    return;
+  }
+  autoPlay = true;
+  pieces = parseFen(card.fen);
+  orient = card.side;
+  $("book").innerHTML = gameHeader(card);
+  locked = false;
+  showPath(card.path);
+  $("feedback").innerHTML = cardTag(card);
+  $("fen").textContent = card.fen;
+  $("copyfen").textContent = "Copy FEN";
+  $("analyze").href = `https://lichess.org/analysis/${card.fen.replace(/ /g, "_")}?color=${card.side}`;
+  $("gamelink").href = card.game.url;
+  $("fenrow").hidden = false;
+  render();
+}
+
+function applyMove(uci) {
+  const from = uci.slice(0, 2), to = uci.slice(2, 4), promo = uci[4];
+  const p = pieces[from], white = p === p.toUpperCase();
+  const df = to.charCodeAt(0) - from.charCodeAt(0);
+  if (p.toLowerCase() === "k" && Math.abs(df) === 2) {
+    const rank = from[1];
+    const [rFrom, rTo] = df > 0 ? ["h" + rank, "f" + rank] : ["a" + rank, "d" + rank];
+    pieces[rTo] = pieces[rFrom];
+    delete pieces[rFrom];
+  }
+  if (p.toLowerCase() === "p" && df !== 0 && !pieces[to]) {
+    delete pieces[to[0] + from[1]];  // en passant
+  }
+  pieces[to] = promo ? (white ? promo.toUpperCase() : promo) : p;
+  delete pieces[from];
+}
+
+function moveWithEval(m) {
+  return `<b>${m.san}</b>` + (m.eval ? ` (${m.eval})` : "");
+}
+
+function rankingText(res) {
+  const list = res.options.filter(o => o.rank).map(o => `${o.san} ${o.eval}`).join(", ");
+  return `In the game you played ${moveWithEval(res.played)}. Stockfish at depth ${res.depth}: ${list}.`;
+}
+
+async function tryMove(from, to) {
+  selected = null;
+  let uci = from + to;
+  if (!card.legal.includes(uci)) {
+    if (card.legal.includes(uci + "q")) uci += "q"; else { render(); return; }
+  }
+  locked = true;
+  // Show the move on the board before revealing the result.
+  applyMove(uci);
+  render();
+  const res = await api("/answer", { fen: card.fen, uci });
+  showStats(res.stats);
+  const fb = $("feedback");
+  const sans = res.answers.map(a => `<b>${a.san}</b>`).join(" or ");
+  if (res.correct) {
+    fb.className = "good";
+    const others = res.answers.filter(a => a.uci !== uci);
+    fb.innerHTML = `<b>Correct!</b> That's your book move` +
+      (others.length ? ` (also in your book: ${others.map(a => a.san).join(", ")})` : "") +
+      `. ${rankingText(res)} ${reviewText(res.nextReviewDays)}`;
+  } else {
+    fb.className = "bad";
+    pieces = parseFen(card.fen);
+    render();
+    const again = uci === res.played.uci ? "<b>That's the move you played in the game.</b>" : "<b>Not it.</b>";
+    fb.innerHTML = `${again} Your book move is ${sans}. ${rankingText(res)} ` +
+      `This position will come back in a few cards.`;
+    res.answers.forEach(a => drawArrow(a.uci));
+  }
+  $("next").hidden = false;
+  $("next").focus();
+}
+
+
+// ---- game loop: deck clear → play on lichess → analysis → new card
+
+function showGame(state) {
+  phase = state.phase;
+  const active = ACTIVE.includes(state.phase);
+  $("feedback").className = "info";
+  const link = state.gameUrl ? ` <a href="${state.gameUrl}" target="_blank" rel="noopener">Open game</a>` : "";
+  $("feedback").innerHTML = `<b>${esc(state.message)}</b>${link}` +
+    (state.detail ? `<span class="detail">${esc(state.detail)}</span>` : "");
+  $("playnow").hidden = active;
+  $("gamebtns").hidden = false;
+  if (active) gameButton("Cancel", cancelGame);
+  else gameButton(`Play ${timeControl} on lichess`, play);
+}
+
+function gameButton(label, onClick) {
+  $("gameaction").textContent = label;
+  $("gameaction").onclick = onClick;
+}
+
+function enterGameMode(state) {
+  stopCountdown();
+  card = null;
+  clearBoardUi();
+  shownFen = null;
+  if (!showAnalysis(state)) {
+    orient = "white";
+    pieces = parseFen(START);
+    render();
+  }
+  showGame(state);
+  if (!polling) polling = setInterval(pollGame, 2000);
+}
+
+// While a game is analyzed, the board shows the position being checked,
+// with an arrow for the move you played there.
+function showAnalysis(state) {
+  if (state.phase !== "analyzing" || !state.fen) return false;
+  if (state.fen === shownFen) return true;
+  shownFen = state.fen;
+  orient = state.side;
+  pieces = parseFen(state.fen);
+  render();
+  $("arrows").innerHTML = "";
+  if (state.move) drawArrow(state.move);
+  return true;
+}
+
+async function pollGame() {
+  const state = await api("/state");
+  if (ACTIVE.includes(state.phase)) { showAnalysis(state); showGame(state); return; }
+  clearInterval(polling);
+  polling = null;
+  if (state.phase === "decide") { showDecide(state); return; }
+  showGame(state);
+  if (state.phase === "done") {
+    // Leave the result up for a moment, then go back to the cards.
+    setTimeout(loadCard, 2500);
+  }
+}
+
+async function play() {
+  stopCountdown();
+  const state = await api("/play", {});
+  if (state.error) { showDecide(await api("/state")); return; }
+  enterGameMode(state);
+}
+
+// ---- choosing a book move
+
+function showDecide(state) {
+  stopCountdown();
+  const p = state.pending;
+  card = null;
+  clearBoardUi();
+  orient = p.side;
+  pieces = parseFen(p.fen);
+  render();
+  const g = p.game;
+  const opp = esc(g.opponent) + (g.rating ? ` (${g.rating})` : "");
+  $("book").innerHTML = `vs ${opp} · ${g.speed || ""} · ${g.date} — you are ${p.side === "white" ? "White" : "Black"}, ` +
+    `move ${moveLabel(p)}`;
+  showPath(p.path);
+  $("feedback").className = "info";
+  $("feedback").innerHTML = `<b>Choose a move for your book.</b>` +
+    `<span class="detail">You played <b>${p.played.san}</b>` +
+    (p.inBook ? ", which isn't in your book." : `; Stockfish (depth ${p.depth}) prefers the moves above it.`) +
+    ` Pick your own move to keep building from the game, or another move to stop here and make this a flashcard.</span>`;
+  const box = $("options");
+  box.innerHTML = "";
+  p.options.forEach(o => {
+    const b = document.createElement("button");
+    if (o.played) b.className = "mine";
+    const tags = [o.played ? "your move" : "", o.book ? "book" : ""].filter(Boolean).join(" · ");
+    b.innerHTML = `<span class="rk">${o.rank ? o.rank + "." : ""}</span><b>${o.san}</b>` +
+      (tags ? ` <span class="tagline">${tags}</span>` : "") + `<span class="ev">${o.eval}</span>`;
+    b.onclick = () => choose(o.uci);
+    box.appendChild(b);
+    if (!o.played && o.rank) drawArrow(o.uci);
+  });
+  box.hidden = false;
+  $("playnow").hidden = true;
+}
+
+async function choose(uci) {
+  $("options").hidden = true;
+  const state = await api("/decide", { uci });
+  if (state.error) { showDecide(await api("/state")); return; }
+  if (ACTIVE.includes(state.phase)) { enterGameMode(state); return; }
+  showStats(await api("/start", {}));
+  showGame(state);
+  setTimeout(loadCard, 2500);
+}
+
+// ---- settings
+
+function fillSettings(state) {
+  timeControl = state.timeControl;
+  $("tc").innerHTML = state.timeControls.map(t => `<option${t === state.timeControl ? " selected" : ""}>${t}</option>`).join("");
+  $("depth").innerHTML = state.depths.map(d => `<option${d === state.depth ? " selected" : ""}>${d}</option>`).join("");
+  $("playnow").textContent = `Play ${timeControl} now`;
+}
+
+async function saveSettings() {
+  const before = timeControl;
+  const state = await api("/settings", { timeControl: $("tc").value, depth: +$("depth").value });
+  fillSettings(state);
+  // Still looking for an opponent: search again in the new pool.
+  if (phase === "seeking" && timeControl !== before) { play(); return; }
+  if (!$("gamebtns").hidden && $("gameaction").textContent.startsWith("Play")) {
+    gameButton(`Play ${timeControl} on lichess`, play);
+  }
+}
+$("tc").addEventListener("change", saveSettings);
+$("depth").addEventListener("change", saveSettings);
+
+async function cancelGame() {
+  const state = await api("/cancel", {});
+  clearInterval(polling);
+  polling = null;
+  showGame(state);
+}
+
+function deckClear() {
+  orient = "white";
+  pieces = parseFen(START);
+  render();
+  let left = 3;
+  $("feedback").className = "info";
+  $("gamebtns").hidden = false;
+  $("playnow").hidden = true;
+  gameButton("Cancel", () => {
+    stopCountdown();
+    showGame({ phase: "idle", message: "Deck clear.", detail: "Play a game when you're ready." });
+  });
+  const tick = () => {
+    $("feedback").innerHTML = `<b>Deck clear!</b> Finding a ${timeControl} game on lichess in ${left}…`;
+    if (left-- === 0) play();
+  };
+  tick();
+  countdown = setInterval(tick, 1000);
+}
+
+function stopCountdown() {
+  if (countdown) clearInterval(countdown);
+  countdown = null;
+}
+
+// ---- input
+
+function squareAt(x, y) {
+  const el = document.elementFromPoint(x, y);
+  const sq = el && el.closest(".sq");
+  return sq ? sq.dataset.sq : null;
+}
+
+$("board").addEventListener("pointerdown", e => {
+  if (locked) return;
+  const sq = squareAt(e.clientX, e.clientY);
+  if (!sq) return;
+  if (selected && selected !== sq && !ownPiece(sq)) { tryMove(selected, sq); return; }
+  if (!ownPiece(sq)) { selected = null; render(); return; }
+  selected = sq;
+  drag = { from: sq, moved: false };
+  const ghost = document.createElement("div");
+  ghost.id = "drag";
+  ghost.innerHTML = pieceHtml(pieces[sq]);
+  ghost.style.left = e.clientX + "px";
+  ghost.style.top = e.clientY + "px";
+  document.body.appendChild(ghost);
+  render();
+});
+
+window.addEventListener("pointermove", e => {
+  if (!drag) return;
+  drag.moved = true;
+  const g = $("drag");
+  g.style.left = e.clientX + "px";
+  g.style.top = e.clientY + "px";
+});
+
+window.addEventListener("pointerup", e => {
+  if (!drag) return;
+  const from = drag.from;
+  drag = null;
+  $("drag").remove();
+  const to = squareAt(e.clientX, e.clientY);
+  if (to && to !== from) tryMove(from, to); else render();
+});
+
+$("next").addEventListener("click", loadCard);
+$("playnow").addEventListener("click", play);
+$("copyfen").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(card.fen);
+    $("copyfen").textContent = "Copied!";
+  } catch (_) {
+    $("copyfen").textContent = "Copy failed — select the text";
+  }
+});
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if ((e.key === "Enter" || e.key === " ") && !$("next").hidden) { e.preventDefault(); loadCard(); }
+});
+
+$("setup").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("setuperr").textContent = "Checking…";
+  const res = await api("/config", { username: $("user").value });
+  if (res.error) { $("setuperr").textContent = res.error; return; }
+  $("setup").hidden = true;
+  begin(res);
+});
+
+async function begin(state) {
+  fillSettings(state);
+  showStats(await api("/start", {}));
+  if (state.phase === "decide") { showDecide(state); return; }
+  if (ACTIVE.includes(state.phase)) { enterGameMode(state); return; }
+  $("playnow").hidden = false;
+  loadCard();
+}
+
+(async () => {
+  pieces = parseFen(START);
+  render();
+  const state = await api("/state");
+  if (!state.username) {
+    $("setup").hidden = false;
+    $("feedback").textContent = "Enter your lichess username to start.";
+    $("user").focus();
+    return;
+  }
+  begin(state);
+})();
+</script>
+</body>
+</html>
