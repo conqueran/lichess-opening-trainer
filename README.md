@@ -23,13 +23,25 @@ Your books start empty and grow with every game. They're standard **Polyglot** `
 
 ## Download
 
-**[Download the latest release](../../releases/latest)** (Windows). The zip includes Stockfish, so there's nothing else to download except Python.
+**[Download the latest release](../../releases/latest)**: `Lichess.Opening.Trainer.zip` for Windows, or `Lichess.Opening.Trainer.Linux.tar.gz` for Linux. Both include Stockfish 19, so there's nothing else to download except Python.
+
+### Windows
 
 1. Install **Python 3** from https://www.python.org/downloads/. During setup, tick **"Add python.exe to PATH"**.
 2. Unzip the release anywhere.
 3. Log in to **lichess.org** in your default browser. You play your games there as usual.
 4. Double-click **`OpeningTrainer.bat`**. The first time, it installs the `python-chess` package. A console window opens (leave it open; closing it stops the trainer), and the trainer opens in your browser at http://localhost:8767.
 5. Enter your lichess username. No password or API token is needed; the trainer only reads your public games through the lichess API.
+
+### Linux
+
+1. Make sure **Python 3** is installed (it usually is; otherwise `sudo apt install python3 python3-venv`, or your distribution's equivalent).
+2. Unpack the download anywhere: `tar xzf Lichess.Opening.Trainer.Linux.tar.gz`
+3. Log in to **lichess.org** in your default browser.
+4. Run `./OpeningTrainer.sh` in the unpacked `Lichess Opening Trainer` folder. The first time, it installs `python-chess` into a private `.venv` folder there. Leave the terminal open (Ctrl+C stops the trainer); the trainer opens in your browser at http://localhost:8767.
+5. Enter your lichess username.
+
+To use a Stockfish installed on your system instead (for example `sudo apt install stockfish`), delete the bundled `stockfish` folder; the trainer then uses the `stockfish` command.
 
 ## How it works
 
@@ -64,12 +76,12 @@ Because the books are plain Polyglot files, other chess programs can read them. 
 
 The repository doesn't include Stockfish, because the exe is over GitHub's 100 MB file limit. To run from a clone:
 
-1. Download Stockfish from https://stockfishchess.org/download/ and put its `.exe` in a folder named `stockfish` next to `trainer.py`. Any build works; the trainer uses whichever `stockfish*.exe` it finds there.
-2. Run `pip install chess`, then `python trainer.py`.
+1. Get Stockfish: download it from https://stockfishchess.org/download/ and put the program in a folder named `stockfish` next to `trainer.py` (any build works; the trainer uses whichever `stockfish*` program it finds there), or install it so the `stockfish` command works.
+2. On Windows, run `pip install chess`, then `python trainer.py`. On Linux, run `./OpeningTrainer.sh`.
 
 ## Requirements
 
-- Windows (the bundled Stockfish is a Windows build), Python 3, and a lichess account.
+- Windows or Linux, Python 3, and a lichess account.
 - The bundled Stockfish 19 is the universal x86-64 build, which picks the fastest code for your CPU, so it runs on any 64-bit Intel or AMD PC.
 
 ## License

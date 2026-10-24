@@ -19,6 +19,7 @@ Run:  python trainer.py   (requires: pip install chess)
 import json
 import os
 import random
+import shutil
 import struct
 import threading
 import time
@@ -35,12 +36,31 @@ import chess.polyglot
 HERE = Path(__file__).resolve().parent
 CHESS_DIR = HERE.parent
 BOOKS = {chess.WHITE: HERE / "White.bin", chess.BLACK: HERE / "Black.bin"}
+
+
+def find_stockfish(folders, windows=os.name == "nt"):
+    """The first Stockfish program in `folders`, else one on the PATH, else None.
+
+    Any build will do: stockfish-windows-….exe on Windows, or an executable
+    stockfish-linux-… (no .exe) elsewhere, which skips the README and license.
+    """
+    for folder in folders:
+        for path in sorted(folder.glob("stockfish*")):
+            if not path.is_file():
+                continue
+            is_exe = path.suffix.lower() == ".exe"
+            if is_exe if windows else (not is_exe and os.access(path, os.X_OK)):
+                return path
+    found = shutil.which("stockfish")
+    return Path(found) if found else None
+
+
 # Stockfish ships inside this folder when the trainer is shared; otherwise it's
-# the stockfish folder next to it. Any Stockfish build's exe will do.
-STOCKFISH = next((exe for folder in (HERE / "stockfish", CHESS_DIR / "stockfish")
-                  for exe in sorted(folder.glob("stockfish*.exe"))), None)
-STOCKFISH_MISSING = (f"Stockfish wasn't found. Put the Stockfish .exe in a folder named "
-                     f"'stockfish' inside {HERE}.")
+# the stockfish folder next to it, or one installed on the system.
+STOCKFISH = find_stockfish([HERE / "stockfish", CHESS_DIR / "stockfish"])
+STOCKFISH_MISSING = (f"Stockfish wasn't found. Put Stockfish in a folder named 'stockfish' "
+                     f"inside {HERE}, or install it so the 'stockfish' command works.")
+
 PROGRESS_FILE = HERE / "progress.json"
 CONFIG_FILE = HERE / "config.json"
 PORT = 8767
