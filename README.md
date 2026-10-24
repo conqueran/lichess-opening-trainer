@@ -27,8 +27,8 @@ Your books start empty and grow with every game. They're standard **Polyglot** `
 
 ### Windows
 
-1. Install **Python 3** from https://www.python.org/downloads/. During setup, tick **"Add python.exe to PATH"**.
-2. Unzip the release anywhere.
+1. Install **Python 3** from https://www.python.org/downloads/ (about a 30 MB download). During setup, tick **"Add python.exe to PATH"**.
+2. **Extract the zip** anywhere: right-click it and choose *Extract All…*. Don't run the trainer from inside the zip; it can't find its files there.
 3. Log in to **lichess.org** in your default browser. You play your games there as usual.
 4. Double-click **`OpeningTrainer.bat`**. The first time, it installs the `python-chess` package. A console window opens (leave it open; closing it stops the trainer), and the trainer opens in your browser at http://localhost:8767.
 5. Enter your lichess username. No password or API token is needed; the trainer only reads your public games through the lichess API.

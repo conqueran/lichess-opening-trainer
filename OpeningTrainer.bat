@@ -1,6 +1,15 @@
 @echo off
 cd /d "%~dp0"
 
+if not exist "trainer.py" (
+    echo The trainer's files aren't next to this launcher.
+    echo If you opened the zip, extract it first: right-click the zip,
+    echo choose "Extract All...", then run OpeningTrainer.bat from the
+    echo extracted "Lichess Opening Trainer" folder.
+    pause
+    exit /b 1
+)
+
 python --version >nul 2>&1
 if errorlevel 1 (
     echo Python 3 is needed to run the Lichess Opening Trainer.
