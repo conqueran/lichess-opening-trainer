@@ -93,6 +93,8 @@
   <div id="settings">
     <label>Time control <select id="tc"></select></label>
     <label>Analysis depth <select id="depth"></select></label>
+    <label title="When you leave your book or don't play Stockfish's best move, use your book move (or Stockfish's top move) as the answer instead of ranking the moves and asking you.">
+      <input type="checkbox" id="autopick"> Pick for me (book or top move, no ranking)</label>
   </div>
   <div id="book"></div>
   <div id="path"></div>
@@ -329,8 +331,11 @@ function moveWithEval(m) {
 }
 
 function rankingText(res) {
-  const list = res.options.filter(o => o.rank).map(o => `${o.san} ${o.eval}`).join(", ");
-  return `In the game you played ${moveWithEval(res.played)}. Stockfish at depth ${res.depth}: ${list}.`;
+  const ranked = res.options.filter(o => o.rank);
+  const game = `In the game you played ${moveWithEval(res.played)}.`;
+  // Cards from "Pick for me" on a book position have no engine ranking.
+  if (!ranked.length) return game;
+  return `${game} Stockfish at depth ${res.depth}: ${ranked.map(o => `${o.san} ${o.eval}`).join(", ")}.`;
 }
 
 async function tryMove(from, to) {
@@ -488,12 +493,14 @@ function fillSettings(state) {
   timeControl = state.timeControl;
   $("tc").innerHTML = state.timeControls.map(t => `<option${t === state.timeControl ? " selected" : ""}>${t}</option>`).join("");
   $("depth").innerHTML = state.depths.map(d => `<option${d === state.depth ? " selected" : ""}>${d}</option>`).join("");
+  $("autopick").checked = state.autoPick;
   $("playnow").textContent = `Play ${timeControl} now`;
 }
 
 async function saveSettings() {
   const before = timeControl;
-  const state = await api("/settings", { timeControl: $("tc").value, depth: +$("depth").value });
+  const state = await api("/settings", { timeControl: $("tc").value, depth: +$("depth").value,
+                                          autoPick: $("autopick").checked });
   fillSettings(state);
   // Still looking for an opponent: search again in the new pool.
   if (phase === "seeking" && timeControl !== before) { play(); return; }
@@ -503,6 +510,7 @@ async function saveSettings() {
 }
 $("tc").addEventListener("change", saveSettings);
 $("depth").addEventListener("change", saveSettings);
+$("autopick").addEventListener("change", saveSettings);
 
 async function cancelGame() {
   const state = await api("/cancel", {});

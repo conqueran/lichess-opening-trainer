@@ -68,7 +68,7 @@ PORT = 8767
 LICHESS = "https://lichess.org"
 TIME_CONTROLS = ["1+0", "2+1", "3+0", "3+2", "5+0", "5+3", "10+0", "10+5", "15+10", "30+0", "30+20"]
 DEPTHS = [18, 20, 22, 24, 26, 28, 30]
-DEFAULTS = {"timeControl": "5+0", "depth": 24}
+DEFAULTS = {"timeControl": "5+0", "depth": 24, "autoPick": False}
 SEEK_POLL = 3      # seconds between checks for the game to start
 GAME_POLL = 5      # seconds between checks for the game to finish
 
@@ -302,13 +302,17 @@ def label(board, san):
     return f"{board.fullmove_number}{'.' if board.turn == chess.WHITE else '...'}{san}"
 
 
-def walk(info, moves, side, start, depth, added, report, cancelled, show=lambda board, move: None):
+def walk(info, moves, side, start, depth, added, report, cancelled, show=lambda board, move: None,
+         auto=False):
     """Walk your moves from ply `start`, adding accepted moves to your book.
 
     show(board, move) is called with each position Stockfish is about to check.
+    With `auto`, a deviation isn't ranked: your book move (or, out of book,
+    Stockfish's top move) is picked for you.
 
-    Returns {"pending": decision} when a choice is needed, or {"added": n}
-    when the game ends. Raises Cancelled.
+    Returns {"pending": decision} when a choice is needed, the same plus
+    "auto": uci when `auto` picked the move, or {"added": n} when the game
+    ends. Raises Cancelled.
     """
     book = Book(BOOKS[side])
     board = chess.Board()
@@ -326,17 +330,41 @@ def walk(info, moves, side, start, depth, added, report, cancelled, show=lambda 
             move = board.parse_san(san)
             if board.turn == side:
                 in_book = book.moves(board)
+
+                def decision(options):
+                    played = next(o for o in options if o["played"])
+                    return {"game": info, "moves": moves, "side": "white" if side == chess.WHITE else "black",
+                            "ply": ply, "fen": board.fen(), "path": moves[:ply], "depth": depth,
+                            "played": played, "options": options, "added": added,
+                            "inBook": bool(in_book)}
+
                 if move in in_book:
                     added += add_previous(book, board, moves, ply)
+                elif auto and in_book:
+                    # You left your own book: your book move is the answer, no engine needed.
+                    options = [{"uci": m.uci(), "san": board.san(m), "eval": None, "rank": None,
+                                "played": False, "book": True} for m in in_book]
+                    options.append({"uci": move.uci(), "san": san, "eval": None, "rank": None,
+                                    "played": True, "book": False})
+                    return {"pending": decision(options), "auto": in_book[0].uci()}
                 else:
                     name = label(board, san)
                     show(board, move)
                     report(f"Checking {name} (depth {depth})…")
-                    ranked = rank(engine, board, move, depth, cancelled,
-                                  lambda more: report(f"Finding where {name} ranks (depth {depth}, {more})…"))
+                    if auto:
+                        ranked = search(engine, board, depth, cancelled, multipv=1)
+                        if ranked[0]["pv"][0] != move:  # your move's eval, to show the gap on the card
+                            ranked = ranked + search(engine, board, depth, cancelled, root_moves=[move])
+                    else:
+                        ranked = rank(engine, board, move, depth, cancelled,
+                                      lambda more: report(f"Finding where {name} ranks (depth {depth}, {more})…"))
                     if len(ranked) == 1 and not in_book:
                         added += add_previous(book, board, moves, ply)
                         added += book.add(board, move)
+                    elif auto:
+                        options = [option(board, ranked[0], 1, move, in_book),
+                                   {**option(board, ranked[1], None, move, in_book), "rank": None}]
+                        return {"pending": decision(options), "auto": options[0]["uci"]}
                     else:
                         options = [option(board, i, n + 1, move, in_book) for n, i in enumerate(ranked)]
                         listed = {o["uci"] for o in options}
@@ -344,12 +372,7 @@ def walk(info, moves, side, start, depth, added, report, cancelled, show=lambda 
                             if m.uci() not in listed:
                                 extra = search(engine, board, depth, cancelled, root_moves=[m])[0]
                                 options.append({**option(board, extra, None, move, in_book), "rank": None})
-                        played = next(o for o in options if o["played"])
-                        return {"pending": {
-                            "game": info, "moves": moves, "side": "white" if side == chess.WHITE else "black",
-                            "ply": ply, "fen": board.fen(), "path": moves[:ply], "depth": depth,
-                            "played": played, "options": options, "added": added,
-                            "inBook": bool(in_book)}}
+                        return {"pending": decision(options)}
             board.push(move)
         return {"added": added}
     finally:
@@ -401,6 +424,9 @@ def finish(token, result, info, side):
     """Store a walk's outcome: a decision to make, or the end of the game."""
     if "pending" in result:
         p = result["pending"]
+        if result.get("auto"):
+            apply_choice(p, result["auto"], picked=True)
+            return
         update_progress(lambda progress: progress.update(pending=p))
         set_game(token, phase="decide", message="Choose a move for your book.", detail="")
         return
@@ -418,7 +444,7 @@ def log_game(game_id, result, fen):
     update_progress(change)
 
 
-def game_worker(token, user, tc, depth):
+def game_worker(token, user, tc, depth, auto):
     def alive():
         with lock:
             return game["token"] == token
@@ -464,7 +490,7 @@ def game_worker(token, user, tc, depth):
         info = game_info(g, side)
         result = walk(info, moves, side, 0, depth, 0,
                       report=lambda text: set_game(token, detail=text), cancelled=lambda: not alive(),
-                      show=shower(token))
+                      show=shower(token), auto=auto)
         finish(token, result, info, side)
     except Cancelled:
         pass
@@ -475,7 +501,8 @@ def game_worker(token, user, tc, depth):
 def start_game():
     cfg = config()
     token = new_token(phase="seeking", message="Opening lichess…", detail="", gameUrl=None, fen=None, move=None)
-    threading.Thread(target=game_worker, args=(token, cfg["username"], cfg["timeControl"], cfg["depth"]),
+    threading.Thread(target=game_worker,
+                     args=(token, cfg["username"], cfg["timeControl"], cfg["depth"], cfg["autoPick"]),
                      daemon=True).start()
 
 
@@ -490,6 +517,15 @@ def decide(uci):
         p = progress["pending"]
     if not p:
         return "Nothing to decide."
+    return apply_choice(p, uci)
+
+
+def apply_choice(p, uci, picked=False):
+    """Put the chosen move for decision `p` in the book, then continue or make the card.
+
+    picked is true when "Pick for me" chose the move rather than you.
+    Returns an error string or None.
+    """
     choice = next((o for o in p["options"] if o["uci"] == uci), None)
     if choice is None:
         return "That move isn't one of the options."
@@ -539,10 +575,15 @@ def decide(uci):
         progress["games"].append({"id": p["game"]["id"], "date": time.strftime("%Y-%m-%d %H:%M"),
                                   "result": f"{added} added, card", "fen": card["fen"]})
     update_progress(change)
+    if picked:
+        source = "your book move" if choice["book"] else "Stockfish's best"
+        detail = (f"Move {board.fullmove_number}: you played {p['played']['san']}; "
+                  f"{source} is {choice['san']}.")
+    else:
+        detail = f"Move {board.fullmove_number}: you chose {choice['san']} over your {p['played']['san']}."
     new_token(phase="done", fen=None, move=None,
               message=f"Added {moves_word(added)} to your {side_word(side)} book, and a new card.",
-              detail=f"Move {board.fullmove_number}: you chose {choice['san']} over your "
-                     f"{p['played']['san']}.", gameUrl=None)
+              detail=detail, gameUrl=None)
     return None
 
 
@@ -556,6 +597,7 @@ def game_state():
         state["pending"] = {k: v for k, v in pending.items() if k != "moves"}
     cfg = config()
     state.update(username=cfg.get("username"), timeControl=cfg["timeControl"], depth=cfg["depth"],
+                 autoPick=cfg["autoPick"],
                  timeControls=TIME_CONTROLS, depths=DEPTHS)
     return state
 
@@ -768,6 +810,8 @@ class Handler(BaseHTTPRequestHandler):
                 cfg["timeControl"] = data["timeControl"]
             if data.get("depth") in DEPTHS:
                 cfg["depth"] = data["depth"]
+            if isinstance(data.get("autoPick"), bool):
+                cfg["autoPick"] = data["autoPick"]
             save_json(CONFIG_FILE, cfg)
             return self.send_json(game_state())
         if self.path == "/play":

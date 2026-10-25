@@ -56,6 +56,8 @@ To use a Stockfish installed on your system instead (for example `sudo apt insta
 
 A higher analysis depth gives more reliable evaluations but a longer wait after each game. 24 is a good default. Book moves aren't analyzed, so the wait shrinks as your book grows.
 
+**Pick for me.** Tick *Pick for me* at the top of the page to skip the choosing. When you leave your book, your book move becomes the answer; when you don't play Stockfish's best move out of book, its top move does. Either way the walk stops there and the position becomes a flashcard, without ranking every move down to yours, so the wait after a game is much shorter.
+
 ## Your files
 
 These are created next to `trainer.py` on first run. They're yours, and they're ignored by git:
